@@ -8,19 +8,20 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
+import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import org.apache.commons.io.input.ReversedLinesFileReader;
 
 public class ClientGUI extends JFrame implements ActionListener, Thread.UncaughtExceptionHandler, MessageSocketThreadListener {
 
     private static final int WIDTH = 400;
     private static final int HEIGHT = 300;
+    private static final int LAST_HISTORY_LINES_AMOUNT = 100;
 
     private final JTextArea chatArea = new JTextArea();
     private final JPanel panelTop = new JPanel(new GridLayout(2, 3));
@@ -92,6 +93,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         buttonDisconnect.addActionListener(this);
 
         setVisible(true);
+        loadChatHistory("");
     }
 
     @Override
@@ -148,12 +150,52 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         putIntoFileHistory(user, messageToChat);
     }
 
+    private void loadChatHistory(String user) {
+        ArrayList<String> lastMessages = getLastMessagesFromHistory(getHistoryFileName(user));
+        if (lastMessages != null) {
+            lastMessages.forEach(messageToChat -> chatArea.append(String.format("%s%n", messageToChat)));
+        }
+
+    }
+
+    private ArrayList<String> getLastMessagesFromHistory(String historyPath) {
+        File historyFile = new File(historyPath);
+        ArrayList<String> funcResult = new ArrayList<>(LAST_HISTORY_LINES_AMOUNT);
+        if (historyFile.exists() && historyFile.isFile()) {
+            try (ReversedLinesFileReader reader = new ReversedLinesFileReader(historyFile, Charset.defaultCharset())) {
+                String currentLine;
+                while ((currentLine = reader.readLine()) != null) {
+                    if (funcResult.size() >= LAST_HISTORY_LINES_AMOUNT) break;
+                    funcResult.add(0, currentLine);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Не могу загрузить историю чата по причине ошибки: " + e.getMessage());
+            }
+        }
+        return funcResult;
+    }
+
+
+
+//        public static void main(String[] args) {
+//            ArrayList<String>contents = getLatestHistoryLines("c:\\Work\\pingstats.txt");
+//            contents.forEach(str -> System.out.println(str));
+//        }
+
+
+
+
+
     private void putIntoFileHistory(String user, String msg) {
-        try (PrintWriter pw = new PrintWriter(new FileOutputStream(user + "-history.txt", true))) {
+        try (PrintWriter pw = new PrintWriter(new FileOutputStream(getHistoryFileName(user), true))) {
             pw.print(msg);
         } catch (FileNotFoundException e) {
             showError(msg);
         }
+    }
+
+    private String getHistoryFileName(String user) {
+        return user + "-history.txt";
     }
 
     private void showError(String errorMsg) {
@@ -195,6 +237,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
             case AUTH_ACCEPT:
                 this.nickname = values[2];
                 setTitle(WINDOW_TITLE + " authorized with nickname: " + this.nickname);
+                loadChatHistory(this.nickname);
                 break;
             case AUTH_DENIED:
                 putMessageInChatArea("server", msg);
@@ -227,4 +270,5 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
         }
     }
+
 }
