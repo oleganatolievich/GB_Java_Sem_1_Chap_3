@@ -1,6 +1,9 @@
 package lesson_5;
 
+import java.util.ArrayList;
+
 public class Car implements Runnable {
+
     private static int CARS_COUNT;
 
     static {
@@ -32,11 +35,22 @@ public class Car implements Runnable {
             System.out.println(this.name + " готовится");
             Thread.sleep(500 + (int) (Math.random() * 800));
             System.out.println(this.name + " готов");
+            race.getRacersReadyCounter().await();
+            race.getRaceStartedCounter().await();
         } catch (Exception e) {
             e.printStackTrace();
         }
-        for (int i = 0; i < race.getStages().size(); i++) {
-            race.getStages().get(i).go(this);
+        ArrayList<Stage> stages = race.getStages();
+        for (int i = 0; i < stages.size(); i++) {
+            stages.get(i).go(this);
         }
+        race.declareVictoryIfWon(this);
+        race.getRaceFinishedCounter().countDown();
     }
+
+    @Override
+    public String toString() {
+        return String.format("%s, the speed is: %d km/h", getName(), getSpeed());
+    }
+
 }

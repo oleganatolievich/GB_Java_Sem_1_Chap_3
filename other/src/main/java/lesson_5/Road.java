@@ -1,9 +1,14 @@
 package lesson_5;
 
 public class Road extends Stage {
-    public Road(int length) {
+
+    public Road(int length, String description) {
         this.length = length;
-        this.description = "Дорога " + length + " метров";
+        this.description = description;
+    }
+
+    public Road(int length) {
+        this(length, "Дорога " + length + " метров");
     }
 
     @Override
@@ -16,4 +21,5 @@ public class Road extends Stage {
             e.printStackTrace();
         }
     }
+
 }
