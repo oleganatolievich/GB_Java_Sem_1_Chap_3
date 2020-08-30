@@ -1,5 +1,7 @@
 package ru.geekbrains.core;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import ru.geekbrains.chat.common.MessageLibrary;
 import ru.geekbrains.net.MessageSocketThread;
 import ru.geekbrains.net.MessageSocketThreadListener;
@@ -8,11 +10,11 @@ import ru.geekbrains.net.ServerSocketThreadListener;
 
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Vector;
 
 public class ChatServer implements ServerSocketThreadListener, MessageSocketThreadListener {
 
+    private static final Logger logger = LogManager.getLogger(ChatServer.class);
     private ServerSocketThread serverSocketThread;
     private ChatServerListener listener;
     private AuthController authController;
@@ -24,16 +26,19 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
 
     public void start(int port) {
         if (serverSocketThread != null && serverSocketThread.isAlive()) {
+            logger.warn("Server is already started");
             return;
         }
         serverSocketThread = new ServerSocketThread(this,"Chat-Server-Socket-Thread", port, 2000);
         serverSocketThread.start();
         authController = new AuthController();
         authController.init();
+        logger.info("Server started successfully");
     }
 
     public void stop() {
         if (serverSocketThread == null || !serverSocketThread.isAlive()) {
+            logger.warn("Server is already stopped");
             return;
         }
         serverSocketThread.interrupt();
@@ -51,11 +56,13 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
 
     @Override
     public void onSocketAccepted(Socket socket) {
+        logger.info(String.format("Socket accepted: %s", socket.toString()));
         clients.add(new ClientSessionThread(this, "ClientSessionThread", socket));
     }
 
     @Override
     public void onException(Throwable throwable) {
+        logger.error(String.format("Fatal error: %s", throwable.getStackTrace()));
         throwable.printStackTrace();
     }
 
@@ -65,6 +72,7 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
 
     @Override
     public void onClientTimeout(Throwable throwable) {
+        logger.info(String.format("Client timeout: %s", throwable.getMessage()));
     }
 
     @Override
@@ -85,16 +93,20 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
 
     @Override
     public void onMessageReceived(MessageSocketThread thread, String msg) {
+        logger.info(String.format("Message recieved: %s", msg));
         ClientSessionThread clientSession = (ClientSessionThread)thread;
         if (clientSession.isAuthorized()) {
+            logger.info("Client is authorized");
             processAuthorizedUserMessage(msg);
         } else {
+            logger.info("Client is not authorized");
             processUnauthorizedUserMessage(clientSession, msg);
         }
     }
 
     @Override
     public void onException(MessageSocketThread thread, Throwable throwable) {
+        logger.error(String.format("Exception: %s", throwable.getStackTrace()));
         throwable.printStackTrace();
     }
 
@@ -109,6 +121,7 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
     }
 
     private void sendToAllAuthorizedClients(String msg) {
+        logger.info(String.format("Sending to all authorized clients: %s", msg));
         for (ClientSessionThread client : clients) {
             if(!client.isAuthorized()) {
                 continue;
@@ -123,20 +136,26 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
                 !arr[0].equals(MessageLibrary.AUTH_METHOD) ||
                 !arr[1].equals(MessageLibrary.AUTH_REQUEST)) {
             clientSession.authError("Incorrect request: " + msg);
+            logger.error(String.format("Incorrect request: %s", msg));
             return;
         }
         String login = arr[2];
         String password = arr[3];
         String nickname = authController.getNickname(login, password);
+        logger.info(String.format("Login: %s, password: %s, nickname: %s", login, password, nickname));
         if (nickname == null) {
             clientSession.authDeny();
+            logger.warn("Access denied");
             return;
         } else {
             ClientSessionThread oldClientSession = findClientSessionByNickname(nickname);
             clientSession.authAccept(nickname);
+            logger.warn("Access granted");
             if (oldClientSession == null) {
+                logger.info("That's the first connect");
                 sendToAllAuthorizedClients(MessageLibrary.getBroadcastMessage("Server", nickname + " connected"));
             } else {
+                logger.info("Reconnection");
                 oldClientSession.setReconnected(true);
                 clients.remove(oldClientSession);
             }
@@ -145,6 +164,7 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
      }
 
     public void disconnectAll() {
+        logger.info("Disconnecting all users");
         ArrayList<ClientSessionThread> currentClients = new ArrayList<>(clients);
         for (ClientSessionThread client : currentClients) {
             client.close();
@@ -154,6 +174,7 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
     }
 
     private void logMessage(String msg) {
+        logger.warn(String.format("Log message: %s", msg));
         listener.onChatServerMessage(msg);
     }
 
@@ -169,6 +190,7 @@ public class ChatServer implements ServerSocketThreadListener, MessageSocketThre
     }
 
     private ClientSessionThread findClientSessionByNickname(String nickname) {
+        logger.info(String.format("Searching client session by the nick: %s", nickname));
         for (ClientSessionThread client : clients) {
             if (!client.isAuthorized()) {
                 continue;
