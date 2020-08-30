@@ -13,5 +13,6 @@
     </properties>
     <modules>
         <module>chat</module>
+        <module>other</module>
     </modules>
 </project>
